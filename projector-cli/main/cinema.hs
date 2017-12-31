@@ -123,14 +123,20 @@ run args =
 
 cinemaBuild :: Build -> Maybe BackendT -> Maybe StripPrefix -> Glob -> Maybe Glob -> FilePath -> EitherT CinemaError IO ()
 cinemaBuild b mb msp tg mdg o = do
+  let
+    maybeStrip f =
+      maybe f (\sp -> makeRelative (unStripPrefix sp) f) msp
+
   -- Load all our datatypes from disk
-  dfs <- maybe (pure []) globSafe mdg
-  udts <- parseDataFiles dfs
+  dfs  <- maybe (pure []) globSafe mdg
+  let stripeddfs = fmap maybeStrip dfs
+  udts <- parseDataFiles stripeddfs
+
   -- Load all our template files from disk
   tfs <- globSafe tg
   rts <- liftIO . fmap RawTemplates . for tfs $ \f -> do
     body <- T.readFile f
-    let stripPrefix = maybe f (\sp -> makeRelative (unStripPrefix sp) f) msp
+    let stripPrefix = maybeStrip f
     pure (stripPrefix, body)
   -- Run the build
   ba <- hoistEither (first BuildError (runBuild b udts mempty rts))
